@@ -1,10 +1,12 @@
 # coding: utf-8
+require 'date'
+
 lib = File.expand_path('../lib', __FILE__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
 
 Gem::Specification.new do |spec|
   spec.name          = "orvibo-ruby"
-  spec.version       = Orvibo::Ruby::VERSION
+  spec.version       = "0.0.1"
   spec.authors       = ["Robert Saenz"]
   spec.email         = ["robertsaenz@gmail.com"]
   spec.date          = Date.today

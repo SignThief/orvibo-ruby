@@ -33,6 +33,7 @@ module Orvibo
       loop do
         msg, addr = @socket.recvfrom(BUFFER_SIZE)
         puts "Received: #{msg.unpackHex()}"
+        puts "Address: #{addr}"
       end
     end
 

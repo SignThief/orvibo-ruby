@@ -10,5 +10,5 @@ require "orvibo/s20_controller"
 # require "pry"
 # Pry.start
 
-controller = S20Controller.new
+controller = Orvibo::S20Controller.new
 controller.discoverSockets()
