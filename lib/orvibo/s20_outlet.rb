@@ -14,7 +14,7 @@ module Orvibo
     end
 
     def reverse_mac()
-      @mac.reverse
+      @mac.packHex.reverse.unpackHex
     end
 
     def to_s()
