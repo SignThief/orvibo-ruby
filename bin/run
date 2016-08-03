@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 
 require "bundler/setup"
-require "orvibo/s20_controller"
+require "orvibo/s20_socket_manager"
 
 # You can add fixtures and/or initialization code here to make experimenting
 # with your gem easier. You can also use a different console, if you like.
@@ -10,5 +10,7 @@ require "orvibo/s20_controller"
 # require "pry"
 # Pry.start
 
-controller = Orvibo::S20Controller.new
-controller.discoverSockets()
+controller = Orvibo::S20SocketManager.new
+sockets = controller.discoverSockets()
+
+sockets.each {|k,s| puts "#{s}"}

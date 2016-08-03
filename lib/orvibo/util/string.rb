@@ -4,6 +4,10 @@ class String
   end
 
   def unpackHex()
-    unpack("H*")
+    unpack("H*").first
+  end
+
+  def unpackSInt()
+    unpack("n").first
   end
 end

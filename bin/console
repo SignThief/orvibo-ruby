@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 
 require "bundler/setup"
-require "orvibo/ruby"
+require "orvibo/s20_outlet_manager"
 
 # You can add fixtures and/or initialization code here to make experimenting
 # with your gem easier. You can also use a different console, if you like.
@@ -9,6 +9,7 @@ require "orvibo/ruby"
 # (If you use this, don't forget to add pry to your Gemfile!)
 # require "pry"
 # Pry.start
-
+@mgr = Orvibo::S20OutletManager.new
+@outlets = @mgr.discoverOutlets
 require "irb"
 IRB.start
