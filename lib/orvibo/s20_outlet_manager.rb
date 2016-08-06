@@ -16,7 +16,7 @@ module Orvibo
     DISCOVER_CMD = "7167"
     SUBSCRIBE_CMD = "636c"
     INFO_CMD = "7274"
-    INFO_TABLE = "040017"
+    INFO_TABLE = "040003"
     GLOBAL_DISCOVERY_MSG = MAGIC_KEY + "0006" + GDISCOVER_CMD
     DISCOVERY_MSG = MAGIC_KEY + "0012" + DISCOVER_CMD
     SUBSCRIBE = MAGIC_KEY + "001e" + SUBSCRIBE_CMD
@@ -32,30 +32,32 @@ module Orvibo
     WRITE_OUTLET_CODE = "746D"
     NULL_MAC = "000000000000"
     DEFAULT_BROADCAST_ADDRESS = "192.168.1.255"
-    DEFAULT_TIMEOUT = 3
+    DEFAULT_TIMEOUT = 2
     GLOBAL_DISCOVERY_MSG_SIZE = 42
     DISCOVERY_MSG_SIZE = 42
 
     def initialize(timeout = DEFAULT_TIMEOUT, broadcast_address = DEFAULT_BROADCAST_ADDRESS)
-      @socket = UDPSocket.new()
+      @socket = UDPSocket.open
       @socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_BROADCAST, true)
-      @socket.bind(BIND_IP, DEFAULT_PORT)
+      @socket.bind("192.168.1.44", DEFAULT_PORT)
+      @socket.setsockopt(Socket::IPPROTO_IP, Socket::IP_TTL, [1].pack('i'))
       @timeout = timeout
       @broadcast_address = broadcast_address
     end
 
     def discoverOutlets()
-      @socket.send(GLOBAL_DISCOVERY_MSG.packHex(), 0, @broadcast_address, DEFAULT_PORT)
+      sendBroadcastMessage(GLOBAL_DISCOVERY_MSG)
       outlets = {}
       receiveMsg do |msg, addr|
-        data = getDiscoveryFields(msg, addr)
-        puts data.time
-        if !outlets.has_key?("#{data.ip}:#{data.mac}")
-          s = S20Outlet.new(data.mac, data.state, data.ip, data.revision)
-          outlets["#{data.ip}:#{data.mac}"] = s
-        else
-          s = outlets["#{data.ip}:#{data.mac}"]
-          s.state = data.state
+        if msg[0..1].unpackHex == MAGIC_KEY && msg[2..3].unpackSInt == GLOBAL_DISCOVERY_MSG_SIZE && msg[4..5].unpackHex == GDISCOVER_CMD
+          data = getDiscoveryFields(msg, addr)
+          if !outlets.has_key?("#{data.ip}:#{data.mac}")
+            s = S20Outlet.new(data.mac, data.state, data.ip, data.revision)
+            outlets["#{data.ip}:#{data.mac}"] = s
+          else
+            s = outlets["#{data.ip}:#{data.mac}"]
+            s.state = data.state
+          end
         end
       end
       return outlets
@@ -63,7 +65,7 @@ module Orvibo
 
     def refresh(outlet)
       s_msg = DISCOVERY_MSG + outlet.mac + SIX_SPACES
-      @socket.send(s_msg.packHex(), 0, @broadcast_address, DEFAULT_PORT)
+      sendBroadcastMessage(s_msg)
       receiveMsg do |msg, addr|
         if msg[0..1].unpackHex == MAGIC_KEY && msg[2..3].unpackSInt == DISCOVERY_MSG_SIZE && msg[4..5].unpackHex == DISCOVER_CMD
           data = getDiscoveryFields(msg, addr)
@@ -76,12 +78,10 @@ module Orvibo
     def subscribe(outlet)
       s_msg = SUBSCRIBE + outlet.mac + SIX_SPACES +
         outlet.reverse_mac + SIX_SPACES
-      puts "Sending #{s_msg} to #{outlet.ip}"
-      @socket.send(s_msg.packHex(), 0, outlet.ip, DEFAULT_PORT)
+      sendMessage(s_msg, outlet)
       receiveMsg do |msg, addr|
-        puts "Received: #{msg}"
         if msg[4..5].unpackHex == SUBSCRIBE_CMD && addr.last == outlet.ip
-          outlet.status = msg.last.unpackHex
+          outlet.state = msg[-1].unpackHex
         end
       end
     end
@@ -89,7 +89,7 @@ module Orvibo
     def outletInfo(outlet)
       s_msg = INFO_MSG + outlet.mac + SIX_SPACES + FOUR_ZEROS + INFO_TABLE + FOUR_ZEROS
       puts s_msg
-      @socket.send(s_msg, 0, outlet.ip, DEFAULT_PORT)
+      sendMessage(s_msg, outlet)
       receiveMsg do |msg, addr|
         puts "Received: #{msg}"
       end
@@ -126,6 +126,14 @@ module Orvibo
       return fields
     end
 
+    def sendBroadcastMessage(msg)
+      @socket.send(msg.packHex(), 0, @broadcast_address, DEFAULT_PORT)
+    end
+
+    def sendMessage(msg, outlet)
+      @socket.send(msg.packHex(), 0, outlet.ip, DEFAULT_PORT)
+    end
+
     def receiveMsg()
       begin
         loop do
@@ -133,7 +141,7 @@ module Orvibo
           addr = nil
           status = Timeout::timeout(@timeout) do
             msg, addr = @socket.recvfrom(BUFFER_SIZE)
-            if msg[0..1].unpackHex == MAGIC_KEY && msg[2..3].unpackSInt == GLOBAL_DISCOVERY_MSG_SIZE && msg[4..5].unpackHex == GDISCOVER_CMD
+            if msg[0..1].unpackHex == MAGIC_KEY
               yield msg, addr
             end
           end

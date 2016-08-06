@@ -11,5 +11,8 @@ require "orvibo/s20_outlet_manager"
 # Pry.start
 @mgr = Orvibo::S20OutletManager.new
 @outlets = @mgr.discoverOutlets
+@o = @outlets.first.last
+@mgr.subscribe(@o)
+@mgr.outletInfo(@o)
 require "irb"
 IRB.start
