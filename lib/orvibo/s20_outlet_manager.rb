@@ -1,5 +1,6 @@
 require 'orvibo/util/string'
 require 'orvibo/s20_outlet'
+require 'time'
 require 'timeout'
 require 'pp'
 require 'ostruct'
@@ -16,8 +17,12 @@ module Orvibo
     DISCOVER_CMD = "7167"
     SUBSCRIBE_CMD = "636c"
     INFO_CMD = "7274"
+    POWER_CMD = "6463"
     INFO_TABLE = "040003"
+    NAME_INDEX = 70
+    NAME_SIZE = 16
     GLOBAL_DISCOVERY_MSG = MAGIC_KEY + "0006" + GDISCOVER_CMD
+    POWER_TOGGLE_MSG = MAGIC_KEY + "0017" + POWER_CMD
     DISCOVERY_MSG = MAGIC_KEY + "0012" + DISCOVER_CMD
     SUBSCRIBE = MAGIC_KEY + "001e" + SUBSCRIBE_CMD
     INFO_MSG = MAGIC_KEY + "001d" + INFO_CMD
@@ -35,11 +40,12 @@ module Orvibo
     DEFAULT_TIMEOUT = 2
     GLOBAL_DISCOVERY_MSG_SIZE = 42
     DISCOVERY_MSG_SIZE = 42
+    EPOCH_TIME_DIFF_SECS = Time.at(0) - Time.new(1900, 1, 1, 0, 0, 0, "+00:00")
 
     def initialize(timeout = DEFAULT_TIMEOUT, broadcast_address = DEFAULT_BROADCAST_ADDRESS)
       @socket = UDPSocket.open
       @socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_BROADCAST, true)
-      @socket.bind("192.168.1.44", DEFAULT_PORT)
+      @socket.bind(Socket::INADDR_ANY, DEFAULT_PORT)
       @socket.setsockopt(Socket::IPPROTO_IP, Socket::IP_TTL, [1].pack('i'))
       @timeout = timeout
       @broadcast_address = broadcast_address
@@ -51,11 +57,12 @@ module Orvibo
       receiveMsg do |msg, addr|
         if msg[0..1].unpackHex == MAGIC_KEY && msg[2..3].unpackSInt == GLOBAL_DISCOVERY_MSG_SIZE && msg[4..5].unpackHex == GDISCOVER_CMD
           data = getDiscoveryFields(msg, addr)
-          if !outlets.has_key?("#{data.ip}:#{data.mac}")
+          if !outlets.has_key?("#{data.ip}")
             s = S20Outlet.new(data.mac, data.state, data.ip, data.revision)
-            outlets["#{data.ip}:#{data.mac}"] = s
+            s.last_update = data.time
+            outlets["#{data.ip}"] = s
           else
-            s = outlets["#{data.ip}:#{data.mac}"]
+            s = outlets["#{data.ip}"]
             s.state = data.state
           end
         end
@@ -88,19 +95,28 @@ module Orvibo
 
     def outletInfo(outlet)
       s_msg = INFO_MSG + outlet.mac + SIX_SPACES + FOUR_ZEROS + INFO_TABLE + FOUR_ZEROS
-      puts s_msg
       sendMessage(s_msg, outlet)
       receiveMsg do |msg, addr|
-        puts "Received: #{msg}"
+        if msg[4..5].unpackHex == INFO_CMD
+          outlet.name = msg[NAME_INDEX, NAME_SIZE].strip
+        end
       end
     end
 
-    def on()
-      # Send on event
+    def powerOn(outlet)
+      s_msg = POWER_TOGGLE_MSG + outlet.mac + SIX_SPACES + FOUR_ZEROS + "01"
+      sendMessage(s_msg, outlet)
+      receiveMsg do |msg, addr|
+        puts "Received: #{msg.unpackHex}"
+      end
     end
 
-    def off()
-      # Send off event
+    def powerOff(outlet)
+      s_msg = POWER_TOGGLE_MSG + outlet.mac + SIX_SPACES + FOUR_ZEROS + "00"
+      sendMessage(s_msg, outlet)
+      receiveMsg do |msg, addr|
+        puts "Received: #{msg.unpackHex}"
+      end
     end
 
     def addTimer(timerEvent)
@@ -122,7 +138,7 @@ module Orvibo
       fields.state = msg[-1].unpackHex
       fields.command = msg[4..6].unpackHex
       fields.revision = msg[31..36]
-      fields.time = "#{msg[40].ord} #{msg[39].ord} #{msg[38].ord} #{msg[37].ord}"
+      fields.time = parseTime(msg[37..40])
       return fields
     end
 
@@ -150,11 +166,9 @@ module Orvibo
       end
     end
 
-    def parseTimeFields(timeBytes)
+    def parseTime(timeBytes)
+      num_seconds = timeBytes.unpack("I*").first
+      return Time.at(num_seconds - EPOCH_TIME_DIFF_SECS)
     end
-
-
-
-
   end
 end

@@ -5,12 +5,13 @@ require 'pp'
 module Orvibo
 
   class S20Outlet
-    attr_accessor :mac, :ip, :name, :state, :revision
+    attr_accessor :mac, :ip, :name, :state, :revision, :last_update
     def initialize(mac, state = nil, ip = nil, revision = nil)
       @mac = mac
       @state = state
       @ip = ip
       @revision = revision
+      @name = nil
     end
 
     def reverse_mac()
